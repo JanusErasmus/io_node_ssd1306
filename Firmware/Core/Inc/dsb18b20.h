@@ -9,6 +9,8 @@
 #define INC_DSB18B20_H_
 #include <stdint.h>
 
+#include "utils/cli.h"
+
 void DS18B20_Init(GPIO_TypeDef *port, uint32_t pin, void (*make_input_cb)(void),  void (*make_output_cb)(void));
 float DS18B20_sample(int check_crc);
 

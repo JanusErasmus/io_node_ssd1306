@@ -241,7 +241,7 @@ HAL_StatusTypeDef adc_sample(float *voltages)
     }
 
     voltages[0] = inputs[0] - 0.07;
-    voltages[1] = inputs[0] - 0.07;
+    voltages[1] = inputs[1] - 0.07;
 
     for(int k = 2; k < 8; k++)
     {

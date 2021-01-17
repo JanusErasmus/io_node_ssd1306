@@ -33,8 +33,7 @@
 #include <string.h>
 #include "Utils/cli.h"
 #include "stm32f1xx_it.h"
-#include "ssd1306.h"
-#include "dsb18b20.h"
+#include "temp_display.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -79,33 +78,6 @@ void tx_usart2(uint8_t *data, int len)
 	HAL_GPIO_WritePin(USART2_DE_GPIO_Port, USART2_DE_Pin, GPIO_PIN_RESET);
 }
 
-static void make_output()
-{
-//    GPIO_InitTypeDef GPIO_InitStruct = {0};
-//    GPIO_InitStruct.Pin = IN_7_Pin;
-//    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-//    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-    // Streamlined configuration for PB07 as output OD
-    // Set MODE7 = 0x03 (50 MHz Output) , CNF7 = 0x01 (open drain)
-    GPIOB->CRL |= 0x03 << 28 ;
-}
-
-static void make_input()
-{
-//    GPIO_InitTypeDef GPIO_InitStruct = {0};
-//    GPIO_InitStruct.Pin = IN_7_Pin;
-//    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-//    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-    //Streamlined configuration for PB07 as input
-    // Set MODE7 = 0x00 (Input) , CNF7 = 0x01 (floating input)
-    GPIOB->CRL &= ~(0x03 << 28) ;
-}
 /* USER CODE END 0 */
 
 /**
@@ -153,113 +125,40 @@ int main(void)
   printf("APB1    : %lu Hz\n", HAL_RCC_GetPCLK1Freq());
   printf("APB2    : %lu Hz\n", HAL_RCC_GetPCLK2Freq());
 
-
-  DS18B20_Init(IN_7_GPIO_Port, IN_7_Pin, make_input, make_output);
+  display_init();
 
   setbuf(stdout, NULL);
   cli_init("io$ ");
 
-//=========================== Init Display ====================================
-  ssd1306_Init();
-  ssd1306_SetCursor(0, 0);
-  ssd1306_WriteString("Die \"Cute\" skerm", Font_7x10, White);
-  ssd1306_SetCursor(0, 12);
-  ssd1306_WriteString("Besig...", Font_11x18, White);
-  ssd1306_UpdateScreen();
-//=============================================================================
   USART1->CR1 |= USART_CR1_RXNEIE;
   USART1->CR3 |= USART_CR3_EIE;
 
   USART2->CR1 |= USART_CR1_RXNEIE;
   USART2->CR3 |= USART_CR3_EIE;
 
+  uint8_t data[64];
 
-  char data[512];
   uint32_t tick =  HAL_GetTick() + 2000;
-  float shown = 25;
-  float ds_temp = 25;
-  int sample_tick = 0;
-  int display_tick = 50;
-  float prev_temp = 0;
-  float temp_2;
   while (1)
   {
-	  cli_run();
-    /* USER CODE END WHILE */
+      cli_run();
+      display_run();
+      /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-	  int rx = usart2_pop((uint8_t*)data, 512);
-	  if(rx)
-	  {
-		  for (int k = 0; k < rx; ++k)
-		  {
-			  printf("RX %02X\n", data[k]);
-		  }
-	  }
+      /* USER CODE BEGIN 3 */
+      if(tick < HAL_GetTick())
+      {
+          tick = HAL_GetTick() + 100;
 
-	  if(tick < HAL_GetTick())
-	  {
-	      tick = HAL_GetTick() + 100;
-
-
-	      if(sample_tick-- <= 0)
-	      {
-	          sample_tick = 60;
-//	           cpp_report(1);
-
-//=========================== Display temperature =============================
-	          float voltages[8] = {0};
-	          adc_sample(voltages);
-	          float temp = (voltages[0] * 100.0) - 273.0;
-              temp_2 = (voltages[1] * 100.0) - 273.0;
-	          ds_temp = DS18B20_sample(true);
-	          if(((prev_temp - 0.5) > temp) || (temp > (prev_temp + 0.5)))
-	          {
-	              prev_temp = temp;
-	          }
-	      }
-
-	      if(((prev_temp - 0.1) > shown) || (shown > (prev_temp + 0.1)))
-	      {
-	          if(prev_temp > shown)
-	              shown += 0.1;
-
-              if(prev_temp < shown)
-                  shown -= 0.1;
-	      }
-
-	      if(display_tick > 0)
-	      {
-	          ssd1306_Fill(Black);
-	          sprintf(data, "LM: %0.1f", shown);
-	          ssd1306_SetCursor(0, 0);
-	          ssd1306_WriteString(data, Font_7x10, White);
-              sprintf(data, "DS: %0.1f", ds_temp);
-              ssd1306_SetCursor(0, 11);
-              ssd1306_WriteString(data, Font_7x10, White);
-              sprintf(data, "    %0.1f", ds_temp - shown);
-              ssd1306_SetCursor(0, 22);
-              ssd1306_WriteString(data, Font_7x10, White);
-              sprintf(data, "LM2 %0.1f", temp_2);
-              ssd1306_SetCursor(0, 53);
-              ssd1306_WriteString(data, Font_7x10, White);
-	          ssd1306_UpdateScreen();
-	      }
-
-//	      if(display_tick-- == 0)
-//	      {
-//	          ssd1306_Fill(Black);
-//	          ssd1306_UpdateScreen();
-//	      }
-//
-//	      uint8_t inputs;
-//	      gpio_sample_in(&inputs);
-//	      if((inputs & 0x01) == 0)
-//	      {
-//	          display_tick = 50;
-//	      }
-///============================================================================
-	  }
+          int rx = usart2_pop((uint8_t*)data, 64);
+          if(rx)
+          {
+              for (int k = 0; k < rx; ++k)
+              {
+                  printf("UART2 RX %02X\n", data[k]);
+              }
+          }
+      }
   }
 
   /* USER CODE END 3 */
